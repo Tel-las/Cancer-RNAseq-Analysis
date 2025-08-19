@@ -1,0 +1,1546 @@
+---
+title: <center> <h1>Trabalho ECBDB - G3</h1> </center>
+author: <center>Mónica Fernandes(PG42878), Tiago Machado (PG42884), Tiago Silva (PG42885)</center>
+date: <center>`r format(Sys.time(), '%d/%m/%y')`</center>
+output:
+  html_document:
+    theme: spacelab #united, spacelab, journal
+    highlight: kate #zenburn, kate, breezedark
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{css, echo=FALSE}
+.scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{=html}
+<style>
+body {text-align: justify}
+div.fontdoc {font-family: georgia;}
+    body .main-container {
+        max-width: 1750px;
+    }
+</style>
+```
+<div class = "fontdoc">
+
+<font size="4">
+
+<a name="topo"></a>
+
+# *Packages*  
+
+Instalação dos *packages*.
+```{r packages, eval=FALSE, echo=TRUE}
+install.packages("tidyverse")
+
+install.packages("arules")
+
+install.packages("data.table")
+
+install.packages("summarytools")
+
+install.packages("ggpubr")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("limma")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("Glimma")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("edgeR")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("org.Hs.eg.db")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("GO.db")
+
+install.packages("car")
+
+install.packages("caret")
+
+install.packages("RColorBrewer")
+
+install.packages("gplots")
+
+install.packages("FactoMineR")
+
+install.packages("factoextra")
+
+```
+
+Importação dos *packages*.
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(readr)
+library(readxl)
+library(data.table)
+library(tidyverse)
+library(readr)
+library(arules)
+library(dplyr)
+library(summarytools)
+library(ggpubr)
+library(limma)
+library(Glimma)
+library(edgeR)
+library(org.Hs.eg.db)
+library(GO.db)
+library(car)
+library(caret)
+library(RColorBrewer)
+library(gplots)
+library(FactoMineR)
+library(factoextra)
+
+```
+
+# *Datasets*
+
+```{r datasets, message=FALSE, warning=FALSE, results='hide'}
+#dataset contagens
+raw_counts <- read.csv("CCLE_RNAseq_reads.csv")
+
+#dataset mutações
+CCLE_mutations <- read.csv("CCLE_mutations.csv")
+
+#dataset drug resistance
+drug_response <- read.csv("primary-screen-replicate-collapsed-logfold-change.csv")
+
+#dataset com as informações das linhagens
+sample_info <- read_excel("sample_info.xlsx")
+
+#dataset com as informações das drugs
+drug_info <- read.csv("primary-screen-replicate-collapsed-treatment-info.csv")
+
+```
+
+## Explicação dos dados, sua origem e relevância.
+
+No âmbito do trabalho da UC Extração de Conhecimento de Bases de Dados Biológicas, foram extraídos 4 *datasets* da base de dados [DepMap](https://depmap.org/portal/). A base de dados contém inúmeros *datasets*, e o seu objetivo é disponibilizar vários tipos de dados relativos a linhagens celulares cancerígenas de uma forma *opensource*. Para tal recorre ao projeto *Achilles*, que tem como objetivo identificar e catalogar a essencialidade genética, transversal a centenas de linhagens de células cancerígenas. Recorre também ao projeto *CCLE* (*Cancer Cell Line Encyclopedia*), que tem como objetivo realizar a caracterização genética e farmacológica de uma vasta quantidade de modelos de cancro humano.  
+Foi-nos proposto utilizar um *dataset* de expressão genética obtido por RNAseq para genes codificantes de proteínas (**raw_counts**), sendo este o nosso *dataset* **primário**. Mais especificamente, o *dataset* utilizado corresponde a contagens cruas provenientes do projeto *Achilles*, e dados de caracterização genética do projeto *CCLE*.  
+Utilizamos também um *dataset* baseado num *Mutation Annotation Format* (*MAF*), isto é, um conjunto de informações de mutações provenientes de ficheiros "*VCF*" sendo gerados ao nível de projetos. Estas anotações provém dos mesmos projetos do *dataset* de expressão. Este *dataset* (**CCLE_mutations**) corresponde ao nosso *dataset* **secundário**.  
+Como metadado utilizamos o *dataset* **drug_response** que resulta de uma tentativa de acessar o potencial anti-cancerígeno de um conjunto de fármacos não oncológicos, sobre linhagens cancerígenas humanas. Este *dataset* corresponde à viabilidade de linhagens cancerígenas humanas quando expostas aos compostos referidos.  
+Por último, utilizamos o *dataset* **sample_info** que corresponde a informações variadas sobre as linhagens a que se referem os restantes *datasets*.  
+
+## Preparação das variáveis
+
+### Dimensão e estrutura {.tabset}
+
+#### raw_counts {-}
+
+```{r raw_counts, warning=FALSE, class.output="scroll"}
+dim(raw_counts)
+str(raw_counts, give.attr=FALSE)
+
+```
+
+O *dataset* **raw_counts** possui $1379$ linhas, que correspondem a linhagens cancerígenas humanas, e $52440$ colunas, que correspondem a genes. Associados a cada uma das variáveis encontram-se dados de expressão genética provenientes de contagens de *RNAseq*. As linhagens estão identificadas pelo seu "DepMapID" e os genes são identificados pelo seu "Hugo Symbol" seguido do seu "ENSEMBL id" delimitado por parêntesis. Todas as variáveis são númericas, tirando a variável "X1" que corresponde às *labels* das linhagens.
+
+#### CCLE_mutations {-}
+
+```{r CCLE_mutations, warning=FALSE, class.output="scroll"}
+dim(CCLE_mutations)
+str(CCLE_mutations, give.attr=FALSE)
+
+```
+
+O *dataset* **CCLE_mutations** possui $1288288$ linhas, que correspondem a genes que sofreram mutações, e $32$ colunas, que correspondem aos seus descritivos. Contém identificadores ("Entrez_Gene_Id", "Hugo_Symbol", "DepMap_ID", entre outros) e informações sobre a mutação (tipo, posição, entre outros). As primeiras 11 variáveis correspondem a uma parte dos contéudos do formato *MAF*, tendo sido as restantes variáveis adicionadas no âmbito do projeto *CCLE*, como por exemplo as variáveis "cDNA_Change", "isDeleterious", "Variant_annotation", entre outras. Dentro das variáveis adicionadas, um especial destaque para a variável "DepMap_ID", que corresponde ao identificador da linhagem cancerígena humana na qual a mutação ocorre e que permite relacionar este *dataset* com os restantes.
+
+#### drug_response {-}
+
+```{r drug_response, warning=FALSE, class.output="scroll"}
+dim(drug_response)
+str(drug_response, give.attr=FALSE)
+
+```
+
+O *dataset* **drug_response** possui $578$ linhas, que correspondem a linhagens cancerígenas humanas, e $4687$ colunas, que correspondem a fármacos. Associados a cada uma das variáveis encontram-se dados de viabilidade celular face ao fármaco. Estes dados encontram-se normalizados e correspondem a valores de $log$*fold change*, tendo sofrido correções para perturbações experimentais. As linhagens estão identificadas pelo seu "DepMapID" e os fármacos são identificados pelo seu "Broad ID", que corresponde a um identificador das combinações experimentais condição/replicação. Todas as variáveis são númericas, tirando a variável "X" que corresponde às *labels* das linhagens.
+
+#### sample_info {-}
+
+```{r sample_info, warning=FALSE, class.output="scroll"}
+dim(sample_info)
+str(sample_info, give.attr=FALSE)
+
+```
+
+O *dataset* **sample_info** possui $1811$ linhas, que correspondem a linhagens cancerígenas humanas, e $26$ colunas, que correspondem aos seus descritivos. Contém identificadores ("DepMap_ID", "COSMICID", "CCLE_Name", entre outros), informações sobre a linhagem ("source", "culture_type", "lineage", entre outros) e informações sobre o indivíduo ("sex", "age"). Especial destaque para a variável "DepMap_ID", que corresponde ao identificador da linhagem cancerígena humana e que permite relacionar este *dataset* com os restantes.
+
+### Curadoria
+
+```{r curadoria, class.output="scroll"}
+#tratamento do dataset sample_info
+#Definir com caracteres
+sample_info$COSMICID <- as.character(sample_info$COSMICID)
+sample_info$WTSI_Master_Cell_ID <- as.character(sample_info$WTSI_Master_Cell_ID)
+
+#Definir com fatores
+sample_info$sex <- as.factor(sample_info$sex)
+sample_info$source <- as.factor(sample_info$source)
+sample_info$culture_type <- as.factor(sample_info$culture_type)
+sample_info$sample_collection_site <- as.factor(sample_info$sample_collection_site)
+sample_info$primary_or_metastasis <- as.factor(sample_info$primary_or_metastasis)
+sample_info$primary_disease <- as.factor(sample_info$primary_disease)
+sample_info$Subtype <- as.factor(sample_info$Subtype)
+sample_info$lineage <- as.factor(sample_info$lineage)
+sample_info$lineage_subtype <- as.factor(sample_info$lineage_subtype)
+sample_info$lineage_sub_subtype <- as.factor(sample_info$lineage_sub_subtype)
+sample_info$lineage_molecular_subtype <- as.factor(sample_info$lineage_molecular_subtype)
+
+#tratamento do dataset mutations
+#Definir como caracteres
+CCLE_mutations$Hugo_Symbol <- as.character(CCLE_mutations$Hugo_Symbol)
+CCLE_mutations$Entrez_Gene_Id <- as.character(CCLE_mutations$Entrez_Gene_Id)
+CCLE_mutations$NCBI_Build <- as.character(CCLE_mutations$NCBI_Build)
+
+#Definir como fatores
+CCLE_mutations$Strand <- as.factor(CCLE_mutations$Strand)
+CCLE_mutations$Variant_Classification <- as.factor(CCLE_mutations$Variant_Classification)
+CCLE_mutations$Variant_Type <- as.factor(CCLE_mutations$Variant_Type)
+CCLE_mutations$dbSNP_Val_Status <- as.factor(CCLE_mutations$dbSNP_Val_Status)
+CCLE_mutations$DepMap_ID <- as.factor(CCLE_mutations$DepMap_ID)
+CCLE_mutations$Variant_annotation <- as.factor(CCLE_mutations$Variant_annotation)
+
+```
+
+Após a identificação das variáveis foi efetuada uma curadoria manual de forma a certificar que estas se encontravam nos formatos apropriados para a análise estatística. Para este efeito, foram detetadas várias variáveis que se apresentavam como "*character (chr)*" que foram fatorizadas de forma a permitir a sua análise. Por exemplo, a variável "sex" no *dataframe* **sample_info** após importação apresentava-se como uma variável "*chr*" e foi convertida numa variável com dois fatores ("Female", "Male"). O oposto também se verificou, em que variáveis que se apresentavam como numéricas correspondiam na verdade a identificadores e foram convertidas em variáveis "*chr*". Um exemplo deste caso foi a variável "Hugo_Symbol", do *dataframe* **CCLE_mutations**, que se encontrava como numérica e foi convertida em "*character*".  
+
+# Pré-processamento dos dados
+
+## Tratamento de valores omissos
+
+```{r valores_omissos, class.output="scroll"}
+#contagem de NA
+sum(is.na(raw_counts))
+sum(is.na(CCLE_mutations))
+sum(is.na(drug_response))
+sum(is.na(sample_info))
+```
+
+Após uma análise dos *datasets* fornecidos, verificamos que existem valores omissos (*NA*) nos *datasets* **sample_info**, **drug_response** e **CCLE_mutation**.  
+No entanto apenas faz sentido tratar estes valores no *dataset* **drug_response**, uma vez que estes pertencem a variáveis númericas. A exsitência de *NA* neste *dataset* irá afetar a análise a jusante, uma vez que nas análises estatísticas subsequentes existem métodos que não permitem a inclusão de *NA*. No caso dos restantes *datasets* os *NA* que encontramos pertencem a variáveis factoriais ou de tipo "*character*", acabando por, ou não afetar na análise a efetuar a jusante, sendo que podem ser removidos posteriormente caso necessário, ou serem pertencentes a variáveis de pouco interesse para o nosso estudo, ou ainda devido ao facto de tais valores serem impossíveis de substituir devido à especificidade da variável a cada uma das observações, e da dificuldade de imputar dados de tipo não numéricos devido à impossibilidade de calcular valores tais como a média e a mediana.  
+Para tratar os *NA* presentes no *dataset* **drug_response** decidimos substituir todos os *NA* presentes nesse *dataset* pelo valor da **média** da respetiva coluna ao qual o *NA* pertence. Escolhemos substituir os *NA* pela média de cada coluna, uma vez que como a coluna representa o fármaco e a linha o gene, é mais acertado, do nosso ponto de vista, a substituição pela média da resposta a esse fármaco, do que pela resposta do gene a diferentes fármacos. Esta escolha baseia-se no facto de que o mesmo gene pode responder de maneira muito variada a diferentes fármacos, no entanto diferentes genes poderão responder de forma semelhante ao mesmo fármaco. Como explicado anteriormente este tratamento é necessário para que seja possível realizar outras análises a jusante.  
+
+```{r rm_valores_omissos, class.output="scroll"}
+#remover NA do dataset drug_response
+for (i in 2:ncol(drug_response)) { 
+  m = mean(drug_response[,i], na.rm= TRUE) 
+  drug_response[is.na(drug_response[,i]),i] = m 
+}
+
+#contagem de NA 
+sum(is.na(drug_response)) 
+```
+
+## Conecção entre *datasets*  
+
+Como falado anteriormente, os *datasets* encontam-se conetados pelo identificador representativo das linhagens celulares cancerígenas do portal *DepMap*. Como tal, foi considerado de interesse realizar o *subset* destes *datasets* de forma a chegar a uma lista de linhagens celulares transversais a todos os *datasets* que podesse ser utilizada nas análises a efetuar.  
+
+```{r subsets, class.output="scroll"}
+#Troca os nomes das variáveis correspondentes para DepMap_ID
+names(drug_response)[names(drug_response) == "X"] <- "DepMap_ID"
+names(raw_counts)[names(raw_counts) == "X"] <- "DepMap_ID"
+
+#Criar subsets apenas com as linhagens presentes no drug_response
+#Subset dos raw_counts x CCLE_mutation
+sub_raw_counts <- raw_counts %>% filter(raw_counts$DepMap_ID %in% CCLE_mutations$DepMap_ID) 
+dim(sub_raw_counts)
+
+#Subset dos sub_raw_counts x drug_response
+sub_raw_counts <- sub_raw_counts %>% filter(sub_raw_counts$DepMap_ID %in% drug_response$DepMap_ID) 
+dim(sub_raw_counts)
+
+#Subset dos sub_raw_counts x sample_info
+sub_raw_counts <- sub_raw_counts %>% filter(sub_raw_counts$DepMap_ID %in% sample_info$DepMap_ID) 
+dim(sub_raw_counts)
+
+#Subset dos CCLE_mutations x sub_raw_counts
+sub_CCLE_mutations <- CCLE_mutations %>% filter(CCLE_mutations$DepMap_ID %in% sub_raw_counts$DepMap_ID) 
+
+#Subset dos sample_info x sub_raw_counts
+sub_sample_info <- sample_info %>% filter(sample_info$DepMap_ID %in% sub_raw_counts$DepMap_ID) 
+
+#Subset dos drug_response x sub_raw_counts
+sub_drug_response <- drug_response %>% filter(drug_response$DepMap_ID %in% sub_raw_counts$DepMap_ID) 
+
+```
+
+Realizamos a interseção entre o *dataset* **raw_counts** e os restantes de modo a verficar quais as linhagens celulares que se encontram nos 4 *datasets* em questão.  
+Cruzando todos os *datasets* obtivemos $559$ linhagens celulares comuns a todos os *datasets*. Verificamos também que o **drug_response** é o *dataset* mais limitante nesta análise.  
+
+# Sumarização dos dados 
+
+<a name="sum"></a>
+
+## Sumário das variáveis {.tabset}
+
+### CCLE_mutations {-}
+
+```{r sumario_mutations, class.output="scroll"}
+print(dfSummary(sub_CCLE_mutations, style = 'grid', graph.magnif = 1, valid.col = FALSE,
+                max.distinct.values = 5, col.widths = c(100, 200, 200, 350, 500, 250),
+                dfSummary.silent  = TRUE, headings = FALSE, justify = 'l')
+      , method = 'render', max.tbl.height = 500)
+
+```
+
+Após a correta identificação das variáveis, foi efetuado o cálculo das estatísticas de sumário para os *datasets* **sub_sample_info** e **sub_CCLE_mutations**.  
+Esta mesma análise não foi efetuada sobre os *datasets* **sub_raw_counts** e **sub_drug_response**. Estes *datasets* são exclusivamente constituídos por um elevado número de variaveis numéricas. O cálculo dos descritivos associados a estas variáveis é, na nossa ótica, pouco informativo e computacionalmente exaustivo. Em adição, devido ao elevado número de entradas de dados, a normalidade de distribuições pode ser assumida com recurso ao **teorema do limite central**.  
+Relativamente ao *dataset* **sub_CCLE_mutations** as primeiras **3** variáveis correspondem a identificadores de bases de dados.  
+
+A variável **4** corresponde ao cromossoma onde se localiza a mutação em questão. É interessante verificar que o cromossoma 1, com $10\%$ de frequência relativa, é o factor que ocorre com maior frequência nesta variável. 
+
+As variáveis **5**, **6** e **7** correspondem à localização da mutação (início, fim e cadeia). 
+
+A variável **8** corresponde a classificação da variante na qual se insere a mutação. Destaca-se os factores "Missense_Mutation" e "Silent", com aproximadamente $58\%$ e $25\%$ de frequência relativa, respetivamente.
+
+A variável **9** corresponde corresponde ao tipo de variante, e verifica-se que a vasta maioria encontra-se classificado como o tipo "SNP", com cerca de $91\%$ de frequência relativa. 
+
+A variável **10** corresponde ao alelo de referência e a variável **11** corresponde ao alelo com a mutação. 
+
+As variáveis **12** e **13** correspondem a validação dos SNPs, possuindo um elevado número de dados omissos ($84\%$ e $91\%$), referentes a base de dados *dbSNP* (*Single Nucleotide Polimorfism database*).
+
+A variável **14** corresponde a informações relativas à mutação e ao seu posicionamento. 
+
+A variável **15** e **16** correspondem a identificadores, sendo a primeira referente a anotação do transcrito no *ENSEMBL* e a segunda à identificação da linhagem celular pelo seu *DepMap ID*.
+
+A variável **17** corresponde as mudanças no *cDNA*, a variável **18** a mudanças no codão e a **19** a mudanças na proteína associados à mutação. 
+
+A variável **20** classifica de forma binária se a mutação é deletéria ou não, sendo cerca de $85\%$ classicadas como não deletérias. 
+
+A variável **21** classifica de forma binária se a mutação é um *hotspot* da *TCGA* (*The Cancer Genome Atlas*), sendo cerca de $97\%$ classicadas como não o sendo. 
+
+A variável **22** corresponde a contagens de um atributo relacionado com a *TGCA*, possuindo uma **média** de $1,5$, um **desvio-padrão** de $23,3$ e um **coeficiente de variação** razoável com o valor de $23,3\%$.
+
+A variável **23** classifica de forma binária se a mutação é um *hotspot* *COSMIC* (*Catalog of Somatic mutations in Cancer*), sendo $99,7\%$ classicadas como não o sendo. 
+
+A variável **24** corresponde a contagens de relacionados com a *COSMIC*, possuindo uma **média** de $4,9$, um **desvio-padrão** de $253,8$ e um **coeficiente de variação** bastante elevado com o valor de $51,4\%$.
+
+A variável **25** corresponde a "ExAC_AF" e não nos foi possível identificar o seu significado.
+
+A variável **26** corresponde à anotação que se encontra associada a variante na qual se insere a mutação em causa sendo $59,1\%$ da classe "other non-conserving", $25,8\%$ da classe "silent", $15,1\%$ da classe "damaging" e $0.1\%$ da classe "other conserving".
+
+As variáveis **27** a **32** não possuem informação descritiva no portal *DepMap* e não foi possível averiguar a sua significância. Observa-se que possuem um elevado número de valores omissos, e que possuem uma elevada quantidade de caracteres únicos.
+
+<a href="#sum">Voltar à sumarização</a>
+
+### sample_info {-}
+
+```{r sumario_sample, class.output="scroll"}
+print(dfSummary(sub_sample_info, style = 'grid', graph.magnif = 1, valid.col = FALSE,
+                max.distinct.values = 5, col.widths = c(100, 200, 200, 350, 500, 250),
+                dfSummary.silent  = TRUE, headings = FALSE, justify = 'l')
+      , method = 'render', max.tbl.height = 500)
+```
+
+Por último, relativamente ao *dataset* **sub_sample_info** as primeiras **6** variáveis são referentes a identificadores de diversas bases de dados e das linhagens.
+
+A variável **7** refere-se ao género dos indivíduos onde a linhagem é oriunda, sendo cerca de $41\%$ da classe "Female", $53\%$ da classe "Male" e $5\%$ da classe "Unknown".
+
+A variável **8** corresponde ao laboratório que forneceu a linhagem, sendo as 3 primeiras classes com maiores frequência relativas a classe "ATCC" (*American Type Culture Collection*) com $41%$, "DSMZ" (*Deutsche Sammlung von Mikroorganismen und Zellkulturen*) com $15\%$ e "HSRRB" (*Human Science Research Resources Bank*) com $13\%$. 
+
+A variável **9** corresponde ao número de replicações no ambito do projeto para estas linhagens, tendo como **média** $2,1$ e **desvio-padrão** de $0,8$, apresentando um **coeficiente variação** baixo com o valor de $0,4\%$.
+
+A variável **10** corresponde a diferença entre as médias dos controlos positivos e negativos, estando normalizadas. Esta normalização é facilmente após análise do histograma associado, demonstrando uma **distribuição normal**. Apresenta uma **média** de $-3,7$ e **desvio-padrão** de $1,1$, apresentando um **coeficiente variação** baixo com o valor de $-0,3\%$.
+
+A variável **11** corresponde ao tipo de cultura utilizado nas linhagens celulares, sendo a maioria da classe "Adherent" (frequêcia relativa de $90,38\%$).
+
+A variável **12** corresponde a composição do meio de cultura, verificando-se que existem diferentes anotações para a mesma classe, tendo como consequência uma elevada dispersão no número de classes. Mesmo assim é possível verificar que a classe mais abundante corresponde ao meio "RPMI + 10% FBS", com $39,7\%$ de frequência relativa.
+
+A variável **13** corresponde a percentagem de células que permanecem a expressar GFP (*Green Fluorescent protein*) 12 a 14 dias após exposição à atividade da enzima *cas9* na linhagem celular. Apresenta uma **média** de $74,9$ e **desvio-padrão** de $15,3$, apresentando um **coeficiente variação** baixo com o valor de $0,2\%$.
+
+A variável **14** corresponde ao "RRID" (*Cellosaurus research resource identifier*).
+
+A variável **15** corresponde ao "WTSI_Master_Cell_ID" (*Wellcome Trust Sanger Institute*).
+
+A variável **16** corresponde ao local de colheita da amostra, possuindo esta variável $41$ fatores, sendo os primeiros 4 com maior frequencia relativa o "pleural_effusion" ($9,84\%$), "lung" ($9,66\%$), "lymph_node" ($9,12\%$) e "central_nervous_system" ($8,94\%$).
+ 
+A variável **17** corresponde ao estágio cancerígeno da linhagem celular enquanto "Primary" ($59\%$) ou "Metastasis" ($41\%$).
+
+A variável **18** corresponde à categoria da linhagem (**35** classes), leia-se o tipo de cancro associado, sendo os primeiras 3 classes mais abundantes "Lung Cancer" ($19,5\%$), "Skin Cancer" e "Brain Cancer" ($7,51\%$).
+
+A variável **19** corresponde ao nome específico da doença com **173** classes associadas, sendo as primeiras 3 "Adenocarcinoma" ($10,11\%$), "Non-Small Cell Lung Cancer (NSCLC), Adenocarcinoma" ($8,82\%$) e "Melanoma" ($7,35\%$).
+
+A variável **20** corresponde a idade do dador do tecido na altura da colheita. Apresenta uma média de $53$ e desvio-padrão de $18,1$, apresentando um coeficiente variação baixo com o valor de $0,3\%$.
+
+A variável **21** corresponde ao *"Sanger_Model_ID" (Sanger Institute Cell Model Passport)*.
+
+A variável **22** corresponde a comentários publicos na base de dados *DepMap*, sendo totalmente composta por valores omissos.
+
+As variáveis **23**, **24**, **25** corresponde a classificação do tipo de cancro , divididas por tipo (**39** fatores) ("lineage"), subtipo (**104** fatores) ("lineage_subtype") e subsubtipo (**81** fatores) ("lineage_sub_subtype"), respetivamente. Relativamente ao tipo o fator mais abundate é o "lung" com $19,5\%$ de frequência relativa. Já quanto ao subtipo, o fator mais abundante é o "NSCLC" (*Non-small-cell lung carcinoma*) com $15,77\%$ de frequência relativa. Por último o subsubtipo, o fator mais abundante é o "NSCLC_adenocarcinoma", com $16,72\%$ de frequência relativa. Destaca-se que esta variável possui um elevado número de dadps omissos ($48,7\%$)  
+
+A variável **26** corresponde a marcadores moleculares associados ao cancro que permitem a sua identificação ao nível, possuindo **15** fatores. O fator mais abundante é o "MSI" (*microsatellite instability*), com $23,73\%$ de frequência relativa. Nesta variável, $89,4\%$ das entradas correspondem a dados omissos.
+
+<a href="#sum">Voltar à sumarização</a>
+
+## Gráficos de apoio à sumarização
+
+```{r graph_sum, class.output="scroll", fig.align='center'}
+# Pie Chart Variant type
+w = table(sub_CCLE_mutations$Variant_Type)
+t = as.data.frame(w)
+
+slices <- t$Freq
+lbls <- t$Var1
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+pie(slices,labels = lbls, col = c("darkslategray1", "coral", "darkolivegreen1", "navajowhite"),
+   main="Variant Type")
+
+w2 = table(sub_CCLE_mutations$Variant_annotation)
+t2 = as.data.frame(w2)
+
+# Pie Chart Variant annotation
+slices <- t2$Freq
+lbls <- t2$Var1
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels
+lbls <- paste(lbls,"%",sep="") # ad % to labels
+pie(slices,labels = lbls, col = c("darkslategray1", "coral", "darkolivegreen1", "navajowhite"),
+   main="Variant Annotations")
+
+#Teste a homogeneidade das variâncias
+leveneTest(sub_sample_info$age ~ sub_sample_info$sex)
+#There is no evidence to suggest that the variance across groups is statistically significantly different
+
+# Compute the analysis of variance
+res.aov <- aov(sub_sample_info$age ~ sub_sample_info$sex)
+
+# Summary of the analysis
+summary(res.aov)
+#No differences
+
+#Boxplot Age vs Sex
+boxplot(age ~ sex, data = sub_sample_info, main = "Idade Vs Género", xlab = "Género", ylab = "Idade em anos", col = c("darkslategray1", "coral", "darkolivegreen1"))
+
+#Histograma Cas9_Activity
+hist(sub_sample_info$cas9_activity, main = "Atividade Cas9", xlab = "Percentagem", ylab = "Nº de linhagens", col = "navajowhite")
+
+```
+Foram construídos *piecharts* para a visualização das variáveis "Variant_Type" e "Variant_annotation" do *dataset* **sub_CCLE_mutations**.  
+Foi realizada uma análise **ANOVA** entre as variáveis "age" e "sex". A **normalidade** de distribuição **foi assumida** pelo teorema do limite central, e a homogeneidade das variâncias, não havendo evidência que as variâncias entre grupos fossem estatísticamente diferentes, A análise **ANOVA** revelou que **não existem** diferenças significas entre as médias dos grupos da variável "sex" para os valores de "age", como comprovado pela análise do *boxplot* associado.  
+Constuiu-se também um histograma para a visualização da variável "cas9_activity" do *dataset* **sub_sample_info**, observando-se que occore um maior número de linhagens entre as $80-95\%$.
+
+# Expressão diferencial
+
+## Preparação dos metadados  
+
+Para efetuar uma análise de expressão diferencial sobre o *dataset* **raw_counts**, o primeiro passo tomado foi selecionar os metadados que iriam permitir essa análise. Para este primeiro esforço foram selecionados como metadados a variável "primary_or_metastasis" do *dataset* **sample_info** e foi gerada uma nova variável ("mut_counts") que corresponde à contagem do número de mutações associadas a cada linhagem cancerígena, tendo esta informação sido obtida com recurso à manipulação da variável "DepMap_ID" do *dataset* **CCLE_mutations**.  
+
+```{r prep_meta, class.output="scroll"}
+#1º Metadado --> quantificar as mutações de cada linhagem
+#agrupar pelas linhagens celulares 
+mutation_counts  <- CCLE_mutations %>% 
+  group_by(DepMap_ID) %>%
+  summarise(mut_freq = length(DepMap_ID))
+
+#Análise descritiva da coluna mut_freq
+descr(mutation_counts$mut_freq)
+
+#Fazer a discritização dos dados em 3 níveis (low, medium, high) de acordo com a frequência
+mutation_counts$mut_counts <- discretize(mutation_counts$mut_freq, method = "frequency", breaks = 3, labels = c("Low", "Medium", "High")) 
+
+#colocar as linhagens como row names
+mutation_counts <- mutation_counts %>% remove_rownames %>% column_to_rownames(var="DepMap_ID")
+
+#ver descrição do data.frame e distribução por cada nível 
+str(mutation_counts)
+freq(mutation_counts$mut_counts)
+
+
+#2º Metadado - Cancro primário ou metástase
+#Criar o data.frame com as linhagens e o tipo de cancro associada (primário (prim) e metástase (met))
+prim_met = data.frame(label = sample_info$DepMap_ID, type = sample_info$primary_or_metastasis)
+
+#Definir a variável "type" como um factor
+prim_met$type <- as.factor(prim_met$type) 
+
+#Verificar a distribuição das linhagens por tipo de cancro
+freq(prim_met$type)
+
+#transforma a variàvel label em row names, ou seja as linhagens 
+prim_met <- prim_met %>% remove_rownames %>% column_to_rownames(var="label")
+
+#Criar a matriz com os nossos metadados ou seja "cruzar" o nº de mutações com o tipo de cancro de acordo com as linhagens
+metadados <- merge(mutation_counts, prim_met, by=0, all=TRUE)
+
+#Omitir as linhagens que têm NA associados
+metadados_2 <- metadados
+metadados_2$type <- NULL
+clean_metadados <- na.omit(metadados)
+dfSummary(clean_metadados)
+
+#Datasets para análise diferencial
+meta_expression <- raw_counts %>% filter(raw_counts$DepMap_ID %in% clean_metadados$Row.names)
+
+meta_intersect <- clean_metadados %>% filter(clean_metadados$Row.names %in% meta_expression$DepMap_ID)
+
+#Comprovativo do cruzamento
+dim(meta_expression)
+dim(meta_intersect)
+
+```
+
+Para gerar a variável "mut_counts" foram contadas o número de linhas associados ao mesmo "DepMap_ID", gerando a variável "mut_freq". Esta variável numérica foi de seguida convertida numa variável fatorial com recurso a função *discretize* do package *arules*. Esta discretização foi efetuada por frequência, tendo sido pedido à função para gerar $3$ níveis. Isto resultou em 3 níveis com aproximadamente o mesmo número de indivíduos, que classificamos como "Low", "Medium" e "High", sendo isto referente a quantidade relativa de mutações associadas a cada linhagem celular.  
+Foi também definida a variável "type" que foi extraída diretamente a partir da variável "primary_or_metastasis" do *dataset* **sample_info**. Esta variável possuia *NA*, que foram omitidos devido à impossibilidade de imputar dados fatoriais.  
+Estas duas variáveis foram combinadas num *dataset*, **clean_metadados** (sem *NA*), que foi cruzado com o *dataset* **raw_counts**, obtendo-se o *dataset* cruzado de expressão **meta_expression**. Os metadados foram também por sua vez cruzados com este último *dataset* e obteve-se o *dataset* cruzado de metadados **meta_intersect**.  
+Em suma, os *datasets* **meta_expression** e **meta_intersect** possuem os dados de expressão e de metadados respetivamente para as mesma linhagens celulares, sendo a partir destes que iremos efetuar a análise de expressão diferencial. Não se optou por partir dos *datasets* anteriormente cruzados (**sub_raw_counts**, **sub_CCLE_mutations**, **sub_sample_info**, **sub_drug_response**), pois como o *dataset* **drug_response** não será utilizado, e este era o mais limitante nas filtragens anteriores, optou-se por maximizar o número de linhagens celulares passíveis de serem analisadas.  
+
+## Análise Univariada sobre os metadados
+
+Foi efetuada uma exploração univariada para a caracterização dos metadados.
+
+```{r univar, class.output="scroll", fig.align='center'}
+#Estatistica descritiva
+descr(mutation_counts$mut_freq)
+
+#Density plot
+ggdensity(clean_metadados$mut_freq, 
+          main = "Mutation Counts",
+          xlab = "Number of Mutations")
+
+#Q-Q plot
+ggqqplot(clean_metadados$mut_freq, 
+         main = "Mutation Counts")
+#Claramente não normal
+
+#Shapiro-test - Normalidade
+shapiro.test(clean_metadados$mut_freq)
+#Não é normal
+
+#Homogeneidade de variancias
+leveneTest(clean_metadados$mut_freq ~ clean_metadados$type)
+#There is no evidence to suggest that the variance across groups is statistically significantly different
+
+leveneTest(clean_metadados$mut_freq ~ clean_metadados$mut_counts)
+#There is evidence to suggest that the variance across groups is statistically significantly different
+
+##Teste as médias
+#Teste para dois grupos - freq vs type
+wilcox.test(clean_metadados$mut_freq ~ clean_metadados$type,
+                   exact = FALSE)
+
+#Box plot - types
+p<-ggboxplot(clean_metadados, x = "type", y = "mut_freq", 
+          color = "type", palette = c("#00AFBB", "#E7B800"),
+          ylab = "Weight", xlab = "Groups")
+
+ggpar(p, ylim = c(0,1000), main = "Cancer Type")
+
+#Kruskal-wallis - freq vs counts
+res.krusk <- kruskal.test(clean_metadados$mut_freq ~ clean_metadados$mut_counts)
+res.krusk
+
+pairwise.wilcox.test(clean_metadados$mut_freq, clean_metadados$mut_counts,
+                     p.adjust.method = "BH")
+
+#Box plot - counts
+p2<-ggboxplot(clean_metadados, x = "mut_counts", y = "mut_freq", 
+          color = "mut_counts", palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+          ylab = "Weight", xlab = "Treatment")
+
+ggpar(p2, ylim = c(0,2000), main = "Mutation Counts")
+
+```
+
+Conclui-se que a variável "mut_freq", possui uma *média* de $737,43$ e um *desvio-padrão* de $2163,49$, com um mínimo de $16$ e um máximo de $66665$, com um *coeficiente de variação* de $2,93\%$. Com recurso a um *Q-Q plot* e a um *teste de Shapiro-Wilk*, verificou-se que esta variável **não se encontra normalmente distribuída**. A **homogeneidade das variâncias** foi averiguada com recurso ao *teste de Levene*, tendo-se verificado que quando agrupado a variável "mut_freq" pela variável "type" **não existia evidência estatística** para sugerir **diferenças ente a variânca inter-grupos**; o **oposto** verificou-se quando se repetiu a análise coma a variável "mut_counts".  
+Analisando as médias, devido às variáveis **não cumprirem** as assumções da *ANOVA* e do *t-test* (normalidade de distribuição, homogeneidade de variância), optou-se por alternativas não-paramétricas, na forma do *teste de Wilcox* para testar a variância da variável "mut_freq" quando agrupada pela variável "type" (apenas dois grupos), e no *teste de Kruskal-Wallis* para testar a variância da variável "mut_freq" quando agrupada pela variável "mut_counts" (3 grupos).  
+Conclui-se que **não se observam diferenças significativas** entre os fatores da variável "type" relativamente a "mut_freq", e que o **oposto** se verificou entre os fatores da variável "mut_counts" relativamente a "mut_freq", tendo sido efetuadas comparações múltiplas *a posteriori* com o *teste de Wilcox pairwise*, sendo *todas as comparações entre fatores significativas*. Estas conclusões foram verificadas de forma gráfica com recurso aos boxplots acima apresentados.  
+
+## Gerar matriz de expressão  
+
+O *dataset* **meta_expression**, acima explicado, teve a variável "DepMap_ID" definida com os seus *rownames* e foi ordenada e transposta originando a matriz de expressão **exp_matrix** usada para a análise de expressão diferencial.  
+
+```{r exp_matrix, class.output="scroll"}
+#Preparar para transpor dados de expressão/Reservar informação sobre os genes
+meta_expression <- meta_expression %>% remove_rownames %>% column_to_rownames(var="DepMap_ID")
+
+#Ordenar os id das linhagens
+meta_expression_ordered <- meta_expression[ order(row.names(meta_expression)), ]
+
+#Transpor a matrix de expressão
+exp_matrix <- t(meta_expression_ordered)
+
+```
+
+## Criação das anotações  
+
+Com recurso ao package *org.Hs.eg.db* e aos "ENSEMBLIDs" extraídos dos *rownames* da matriz **exp_matrix** foi possível extrair alguma anotação sobre os genes nesta presentes, mais concretamente o seu "ENTREZID", "HUGO SYMBOL" e "GENENAME". Foram removidos da matriz **exp_matrix** todos os genes que não possuiam anotação associada.  
+
+```{r Anotações, class.output="scroll"}
+ensembl_ids <- sub("\\).*", "", sub(".*\\(", "", row.names(exp_matrix))) 
+
+row.names(exp_matrix) = ensembl_ids
+
+ann <- select(org.Hs.eg.db,keys=ensembl_ids,keytype='ENSEMBL',columns=c('ENTREZID',"ENSEMBL","SYMBOL","GENENAME"))
+
+# Remove duplicated rows based on Ensembl_id
+ann <- ann %>% distinct(ENSEMBL, .keep_all = TRUE)
+
+#Número de gene com anotação
+sum(is.na(ann$ENTREZID))
+
+#Lista de genes sem anotação
+noann<-subset(ann,is.na(ann$ENTREZID)) 
+
+dim(exp_matrix)
+
+#Remover genes da matrix de expressao sem anotação
+row.names(exp_matrix) <- ensembl_ids
+
+exp_matrix <- exp_matrix[ !(rownames(exp_matrix) %in% noann$ENSEMBL), ]
+
+#Remover genes da dataframe da anotação sem anotação
+ann <- ann[ !(ann$ENSEMBL %in% noann$ENSEMBL), ]
+
+dim(exp_matrix)
+dim(ann)
+
+```
+
+<a name="meta"></a>
+
+## Análise de expressão diferencial {.tabset}
+
+Foi efetuada a análise de expressão diferencial para **3 metadados específicos**: para a variável "type", para a variável "mut_counts" e para uma combinação destas.
+Para efetuar esta análise começou-se por carregar a matriz de contagens **exp_matrix** num objeto *DGEList*. De seguida foram carregadas as anotações neste objeto, a matriz de **design** para o metadado a ser usado foi construída e foram definidos os contrastes a analisar (**contrast**). A seguir, foi efetuada uma filtragem das contagens com baixos valores de expressão com recurso a função  *filterByExpr* do package *edgeR*, sendo aqui fornecida a matriz de **design**. Foi verificado o tamanho das *libraries* associadas às contagens e calculados os fatores de normalização. O package *limma* foi aqui usado sobre a forma de *limma voom* para transformar as contagens em valores $log2$ normalizados, sendo obtido um gráfico de média-variância. Seguidamente a expressão diferencial foi testada utilizando *limma trend* seguindo a seguinte pipeline:  
+
+* Ajuste do modelo (*fit*) a partir do objeto voom (**v**);  
+* Fornecimento dos contrastes ao modelo (*fit_cont*);  
+* Gerar as estatísticas ("t-statistics", "p-values") (*EBayes*);  
+* Identificação de genes diferencialmente expressos (*summa.fit*) com apresentação de uma tabela com o top 10 genes diferencialmente expressos para um contraste a escolha (*topTable*) e visualização destes resultados de forma gráfica (*plotMD* e *volcanoplot*).  
+
+Este último ponto foi repetido após a filtragem dos resultados de expressão com recurso a função *treat*, tendo se definido um valor de *cut-off* de $log2(1.2)$, devido a este ser o mínimo considerado para relevancia biológica.
+Por último, com recurso à anotação, foi realizado com a função *goana* do package *limma* a análise das ontologias genéticas que se encontravam mais representadas nos genes diferencialmente expressos resultantes da análise anterior.
+
+### Cancer_type {-}
+
+```{r cancer_type, class.output="scroll", fig.align='center'}
+#Carregar no EdgeR
+y <- DGEList(counts = exp_matrix)
+
+#Carregar anotação dos genes
+y$genes <- ann
+
+#Design for mutation types
+Cancer_type <- meta_intersect$type
+
+design = model.matrix(~0+Cancer_type, data = y$samples)
+colnames(design) <- levels(Cancer_type)
+design
+
+#Make contrasts
+contrast <- makeContrasts(Metastasis-Primary, levels=design)
+
+keep <- filterByExpr(y, design)
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+barplot(y$samples$lib.size,names=colnames(y),las=2)
+# Add a title to the plot
+title("Barplot of library sizes")
+
+#Normalization for composition bias
+y <- calcNormFactors(y)
+
+
+#Start limma voom pipeline
+par(mfrow=c(1,1))
+v <- voom(y,design,plot = TRUE)
+
+#Limma Trend
+fit <- lmFit(v, design)
+
+fit.cont <- contrasts.fit(fit, contrast)
+
+fit.cont <- eBayes(fit.cont)
+
+dim(fit.cont)
+
+dim(y$genes)
+
+summa.fit <- decideTests(fit.cont)
+
+summary(summa.fit)
+
+topTable(fit.cont, coef=1)
+
+#Genome - Wide plots
+plotMD(fit.cont,coef=1,status=summa.fit[,"Metastasis - Primary"], values = c(-1, 1), hl.col=c("blue","red"), main = "Metastasis - Primary")
+
+volcanoplot(fit.cont,coef=1,highlight=100,names=y$genes$SYMBOL, main="Metastasis - Primary")
+
+glXYPlot(x=fit.cont$coefficients[,1], y=fit.cont$lods[,1],
+         xlab="logFC", ylab="B", main="Metastasis - Primary",
+         counts=v$E, groups=Cancer_type, status=summa.fit[,1],
+         anno=fit.cont$genes, side.main="ENSEMBL", folder="cancer_type_volcano", html = "cancer_type_volcano")
+
+
+#Testing relative to a threshold - TREAT
+fit.treat <- treat(fit.cont,lfc=log2(1.2))
+
+res.treat <- decideTests(fit.treat)
+
+summary(res.treat)
+
+topTreat(fit.treat, coef=1)
+
+plotMD(fit.treat,coef=1,status=res.treat[,"Metastasis - Primary"], values = c(-1, 1), hl.col=c("blue","red"), main="Metastasis - Primary (TREAT)")
+
+volcanoplot(fit.treat,coef=1,highlight=100,names=y$genes$SYMBOL, main="Metastasis - Primary (TREAT)")
+
+glMDPlot(fit.treat, coef=1, counts=v$E, groups=Cancer_type,
+         status=res.treat, side.main="ENSEMBL", main="Metastasis - Primary",
+         folder="cancer_type_md", html = 'cancer_type_md')
+
+#GO enrichment using goana on Treat results
+go <- goana(fit.treat, coef="Metastasis - Primary", geneid = fit.treat$genes$ENTREZID, species = "Hs")
+topGO(go, n=10)
+
+```
+
+Para esta análise foram definidos como contrastes **Metastasis - Primary**. Da filtragem efetuada, permaneceram na análise $17049$ linhagens das $30639$ iniciais. A análise do gráfico de barras permite inferir que existem linhagens celulares com *library sizes* bastante superiores à média. O *output* gráfico do *limma voom* demonstra que ocorre uma dispersão dos pontos principalmente para valores de $log2 < 10$.  
+Da análise de expressão diferencial resulta que, numa fase inicial e para o único contraste definido existem $1488$ **genes subexpressos** e $1815$ **sobrexpressos**. Isto pode ser analisado graficamente com recurso ao *MD plot* e ao *volcano plot*. Após a análise *TREAT* (*Testing relative to a threshold*) verificou-se que restaram $74$ **genes subexpressos** e $208$ **genes sobreexpressos**, o que também pode ser analisado graficamente com os gráficos já referidos. ^[Uma versão interativa destes gráficos, gerada com o package *Glimma*, encontra-se disponível em HTML em anexo.]  
+Por último, a análise sobre as ontologias genéticas permitiu inferir que se encontram **maioriatariamente subexpressos** genes associados ao processos biológicos de resposta imune e resposta a estímulos para o contraste referido. Isto é consistente com o conhecimento biológico sobre o comportamento de cancros metásticos, dados que ao longo da sua carcinogénese estes acumulam mutações que os levam a suprimir estas respostas de modo a proliferarem com mais facilidade pelo organismo.  
+
+<a href="#meta">Voltar à análise</a>
+
+### Mutation_count {-}
+
+```{r mutation_count, class.output="scroll", fig.align='center'}
+#Carregar no EdgeR
+y <- DGEList(counts = exp_matrix)
+
+#Carregar anotação dos genes
+y$genes <- ann
+
+#Design for mutation types
+Mutation_count <- meta_intersect$mut_counts 
+
+design = model.matrix(~0+Mutation_count, data = y$samples)
+colnames(design) <- levels(Mutation_count)
+design
+
+#Make contrasts
+contrast <- makeContrasts(MvsL=Medium-Low, 
+                          HvsM=High-Medium,
+                          HvsL=High-Low
+                          ,levels=design)
+
+keep <- filterByExpr(y, design)
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+barplot(y$samples$lib.size,names=colnames(y),las=2)
+# Add a title to the plot
+title("Barplot of library sizes")
+
+#Normalization for composition bias
+y <- calcNormFactors(y)
+
+
+#Start limma voom pipeline
+par(mfrow=c(1,1))
+
+v <- voom(y,design,plot = TRUE)
+
+#Limma - Trend
+fit <- lmFit(v, design)
+
+fit.cont <- contrasts.fit(fit, contrast)
+
+fit.cont <- eBayes(fit.cont, trend = F, robust = F)
+
+summa.fit <- decideTests(fit.cont)
+
+summary(summa.fit)
+
+vennDiagram(summa.fit)
+
+topTable(fit.cont, coef="HvsL")
+
+#Genome - Wide plots
+plotMD(fit.cont,coef="HvsL",status=summa.fit[,"HvsL"], values = c(-1, 1), hl.col=c("blue","red"), main = "HvsL")
+
+volcanoplot(fit.cont,coef="HvsL",highlight=100,names=y$genes$SYMBOL, main="HvsL")
+
+glXYPlot(x=fit.cont$coefficients[,1], y=fit.cont$lods[,1],
+         xlab="logFC", ylab="B", main="HvsL",
+         counts=v$E, groups=Mutation_count, status=summa.fit[,1],
+         anno=fit.cont$genes, side.main="ENSEMBL", folder="mut_counts_volcano", html = 'mut_counts_volcano')
+
+
+#Testing relative to a threshold - TREAT
+fit.treat <- treat(fit.cont,lfc=log2(1.2))
+
+res.treat <- decideTests(fit.treat)
+
+summary(res.treat)
+
+topTreat(fit.treat, coef="HvsL")
+
+#Treat plots
+plotMD(fit.treat,coef="HvsL",status=res.treat[,"HvsL"], values = c(-1, 1), hl.col=c("blue","red"), main = "HvsL (TREAT)")
+
+volcanoplot(fit.treat,coef="HvsL",highlight=100,names=y$genes$SYMBOL, main="HvsL (TREAT)")
+
+glMDPlot(fit.treat, coef="HvsL", counts=v$E, groups=Mutation_count,
+         status=res.treat, side.main="ENSEMBL", main="HvsL",
+         folder="mut_counts_md", html = 'mut_counts_md')
+
+
+#GO enrichment using goana on Treat results
+go <- goana(fit.treat, coef="HvsL", geneid = fit.treat$genes$ENTREZID, species = "Hs")
+topGO(go, n=10)
+
+```
+
+Para esta análise foram definidos como contrastes **MvsL(Medium-Low)**, **HvsM(High-Medium)** e **HvsL(High-Low)**. Da filtragem efetuada, permaneceram na análise $18306$ linhagens das $30639$ iniciais. A análise do gráfico de barras permite inferir que existem linhagens celulares com *library sizes* bastante superiores a média. O *output* gráfico do *limma voom* demonstra que ocorre uma dispersão dos pontos principalmente para valores de $log2 < 10$.  
+Da análise de expressão diferencial resulta que, numa fase inicial e para o contraste **MvsL** existem $553$ **genes subexpressos** e $690$ **sobrexpressos**, para o contraste **HvsM** existem $841$ **genes subexpressos** e $726$ **sobrexpressos** e para o contraste **HvsL** existem $3269$ **genes subexpressos** e $3466$ **sobrexpressos.** Isto pode ser analisado graficamente com recurso ao *MD plot* e ao *volcano plot* para o constraste **HvsL** .
+Após a análise *TREAT* (*Testing relative to a threshold*) verificou-se que restaram para o contraste **MvsL** $0$ **genes subexpressos** e $2$ **sobrexpressos**, para o contraste **HvsM** restaram $18$ **genes subexpressos** e $12$ **sobrexpressos** e para o contraste **HvsL** restaram $698$ **genes subexpressos** e $587$ **sobrexpressos**, o que também pode ser analisado graficamente com os gráficos já referidos para o contrate **HvsL**. ^[Uma versão interativa destes gráficos, gerada com o package *Glimma*, encontra-se disponível em HTML em anexo.]  
+Por último, a análise sobre as ontologias genéticas para o contraste **HvsL** permitiu inferir que se encontram **maioriatariamente subexpressos** genes associados a processos biológicos relacionados com a matriz extracelular, formação de vasos sanguíneos e vasculatura e adesão celular para o contraste referido. Isto **não** era o expectável, já que com a acumulação de mutações espera-se que os tumores evoluam no sentido de proliferarem, sendo para tal necessário a ação de genes relacionados com a angiogénese o que não está de acordo com estes resultados.  
+
+<a href="#meta">Voltar à análise</a>
+
+### Combinação {-}
+
+```{r combined, class.output="scroll", fig.align='center'}
+#Carregar no EdgeR
+y <- DGEList(counts = exp_matrix)
+
+#Carregar anotação dos genes
+y$genes <- ann
+
+#Design for mutation types
+Cancer_type <- meta_intersect$type
+Mutation_count <- meta_intersect$mut_counts
+Group <- factor(paste(Cancer_type,Mutation_count,sep="."))
+
+design = model.matrix(~0+Group, data = y$samples)
+colnames(design) <- levels(Group)
+design
+
+#Make contrasts
+contrast <- makeContrasts(MHvsPH = Metastasis.High-Primary.High, 
+                          MLvsPL = Metastasis.Low-Primary.Low,
+                          MHvsML = Metastasis.High-Metastasis.Low,
+                          PHvsPL = Primary.High-Primary.Low,
+                          MHvsPL = Metastasis.High-Primary.Low,
+                          PHvsML = Primary.High-Metastasis.Low,
+                          levels=design)
+
+keep <- filterByExpr(y, design)
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+barplot(y$samples$lib.size,names=colnames(y),las=2)
+# Add a title to the plot
+title("Barplot of library sizes")
+
+# Calculate normalization factors for library sizes with TMM
+y <- calcNormFactors(y)
+
+
+#Start limma voom pipeline
+par(mfrow=c(1,1))
+
+v <- voom(y,design,plot = TRUE)
+
+#Limma - Trend
+fit <- lmFit(v, design)
+
+fit.cont <- contrasts.fit(fit, contrast)
+
+fit.cont <- eBayes(fit.cont, trend = F, robust = F)
+
+summa.fit <- decideTests(fit.cont)
+
+summary(summa.fit)
+
+topTable(fit.cont, coef="MHvsPL")
+
+
+#Genome - Wide plots
+plotMD(fit.cont,coef="MHvsPL",status=summa.fit[,"MHvsPL"], values = c(-1, 1), hl.col=c("blue","red"), main = "MHvsPL")
+
+volcanoplot(fit.cont,coef="MHvsPL",highlight=100,names=y$genes$SYMBOL, main ="MHvsPL")
+
+glXYPlot(x=fit.cont$coefficients[,'MHvsPL'], y=fit.cont$lods[,'MHvsPL'],
+         xlab="logFC", ylab="B", main="MHvsPL",
+         counts=v$E, groups=Group, status=summa.fit[,'MHvsPL'],
+         anno=fit.cont$genes, side.main="ENSEMBL", folder="combined_volcano", html = "combined_volcano")
+
+
+#Testing relative to a threshold - TREAT
+fit.treat <- treat(fit.cont,lfc=log2(1.2))
+
+res.treat <- decideTests(fit.treat)
+
+summary(res.treat)
+
+#MHvsPL
+topTreat(fit.treat, coef="MHvsPL")
+
+#PHvsPL
+topTreat(fit.treat, coef="PHvsPL")
+
+#MHvsPL
+plotMD(fit.treat,coef="MHvsPL",status=res.treat[,"MHvsPL"], values = c(-1, 1), hl.col=c("blue","red"), main = "MHvsPL (TREAT)")
+
+volcanoplot(fit.treat,coef="MHvsPL",highlight=100,names=y$genes$SYMBOL, main = "MHvsPL (TREAT)")
+
+glMDPlot(fit.treat, coef="MHvsPL", counts=v$E, groups=Group,
+         status=res.treat, side.main="ENSEMBL", main="MHvsPL",
+         folder="combined_md", html = "combined_md")
+
+#PHvsPL
+plotMD(fit.treat,coef="PHvsPL",status=res.treat[,"PHvsPL"], values = c(-1, 1), hl.col=c("blue","red"), main = "PHvsPL (TREAT)")
+
+volcanoplot(fit.treat,coef="PHvsPL",highlight=100,names=y$genes$SYMBOL, main = "PHvsPL (TREAT)")
+
+
+#GO enrichment using goana on Treat results
+go <- goana(fit.treat, coef="MHvsPL", geneid = fit.treat$genes$ENTREZID, species = "Hs")
+topGO(go, n=10)
+
+go_2 <- goana(fit.treat, coef="PHvsPL", geneid = fit.treat$genes$ENTREZID, species = "Hs")
+topGO(go_2, n=10)
+
+```
+
+Para esta análise foram definidos como contrastes **MHvsPH (Metastasis.High-Primary.High)**, **MLvsPL (Metastasis.Low-Primary.Low)**,  **MHvsML(Metastasis.High-Metastasis.Low)**, **PHvsPL (Primary.High-Primary.Low)**, **MHvsPL (Metastasis.High-Primary.Low)** e **PHvsML (Primary.High-Metastasis.Low)**. Da filtragem efetuada, permaneceram na análise $20307$ linhagens das $30639$ iniciais. A análise do gráfico de barras permite inferir que existem linhagens celulares com *library sizes* bastante superiores à média. O *output* gráfico do *limma voom* demonstra que ocorre uma dispersão dos pontos principalmente para valores de $log2 < 10$.  
+Da análise de expressão diferencial resulta que, numa fase inicial e para o contraste **MHvsPH** existem $374$ **genes subexpressos** e $842$ **sobrexpressos**, para o contraste **MLvsPL** existem $272$ **genes subexpressos** e $331$ **sobrexpressos**, para o contraste **MHvsML** existem $1038$ **genes subexpressos** e $1200$ **sobrexpressos**, para o contraste **PHvsPL** existem $2708$ **genes subexpressos** e $2973$ **sobrexpressos**, para o contraste **MHvsPL** existem $2909$ **genes subexpressos** e $3952$ **sobrexpressos** e para o contraste **PHvsML** existem $1439$ **genes subexpressos** e $1059$ **sobrexpressos.** Isto pode ser analisado graficamente ao recurso ao *MD plot* e ao *volcano plot* para o constraste **MHvsPL**, que foi selecionado para os gráficos por ser aquele com **mais genes diferencialmente expressos**.  
+Após a análise *TREAT* (*Testing relative to a threshold*) verificou-se que restaram para o contraste **MHvsPH** $9$ **genes subexpressos** e $68$ **sobrexpressos**, para o contraste **MLvsPL** restaram $13$ **genes subexpressos** e $21$ **sobrexpressos**,  para o contraste **MHvsML** restaram $87$ **genes subexpressos** e $122$ **sobrexpressos**, para o contraste **PHvsPL** restaram $759$ **genes subexpressos** e $608$ **sobrexpressos**, para o contraste **MHvsPL** restaram $784$ **genes subexpressos** e $1175$ **sobrexpressos** e para o contraste **PHvsML** restaram $210$ **genes subexpressos** e $67$ **sobrexpressos.** Pode ser realizada uma análise gráfica com os gráficos já referidos para o contrate **MHvsPL**, que é aquele com **mais genes diferencialmente expressos**. ^[Uma versão interativa destes gráficos, gerada com o package *Glimma*, encontra-se disponível em HTML em anexo.]  
+Por último, a análise sobre as ontologias genéticas para o contrastes **MHvsPL** e **PHvsPL** permitiu inferir, para o primeiro, que se encontram **maioriatariamente subexpressos** genes associados a processos biológicos relacionados com a resposta imune, resposta a estímulos externos e resposta a citocinas. Estes são resultados ligeiramente diferentes aqueles que surgiram no contraste **MvsP**, com um maior ênfase para a resposta imune e com a adição da subexpressão da resposta às citocinas. Isto irá permitir um aumento da proliferação celular, favorecendo o processo de carcinogénese.  
+Já quanto ao segundo constraste observamos o mesmo padrão que no contraste **HvsL** anteriormente explorado, com uma **subexpressão** de genes associados à matriz extracelular, migração celular e locomoção celular. Isto leva a crer que com o acumular de mutações em tumores primários ocorre uma supressão destas vias o que não é expectável dado que esta acumulação de mutações esperar-se-ia direcionar o tumor no sentido da metastização. Contudo, também se verifica que a **subexpressão** de genes associados à matriz extracelular pode favorecer a neoplasia, o que pode explicar estes resultados.
+
+<a href="#meta">Voltar à análise</a>
+
+# Análise multivariada
+
+## Pré-processamento
+
+```{r analise multivariada, class.output="scroll"}
+##New exp matrix based on MH and PL lineages
+comb_exp = as.data.frame(cbind(Group, t(exp_matrix)))
+select = c("4", "5")
+comb_exp$Group = as.factor(comb_exp$Group)
+comb_exp = comb_exp[comb_exp$Group %in% select, ]
+comb_exp$Group = as.factor(comb_exp$Group)
+comb_exp$Group <- factor(comb_exp$Group, labels = c("Primary.High", "Primary.Low"))
+groups_combine <- comb_exp$Group
+
+
+#Get differentially expressed genes for the contrast PHvsPL
+genes_diff = topTreat(fit.treat, coef="PHvsPL", number=100)
+
+#Filter the expression matrix to consider these genes
+indexes = which(names(comb_exp)%in%rownames(genes_diff))
+exp_mut = comb_exp[,indexes]
+
+logcounts_genes <- cpm(t(exp_mut), log=TRUE)
+
+```
+
+Dos genes diferencialmente expressos para o contraste **PHvsPL** foram selecionados $100$ para prosseguirem para análise multivariada.
+Isto deveu-se ao facto de considerar-mos mais interessante conseguir, dentro dos tumores primários, averiguar se o número de mutações tinha um efeito claro na separação das linhagens e se era possível construir um modelo para realizar esta classificação.   
+Das $1020$ linhagens originais foram selecionadas as $403$ que se encontravam classificadas como **"Primary.High"** e **"Primary.Low"**, e foi construída uma nova matriz de expressão contendo os genes e variáveis selecionadas, denominado-se "exp_mut". Após a construção deste *dataframe*, este foi normalizado em contagens por milhão e logaritmizado ("logcounts_genes").  
+
+## Análise não supervisionada
+
+### *Heatmap* e *clustering* hierárquico
+
+Foi construído um *heatmap* através do *clustering* hierárquico dos genes e das amostras do *dataframe* "logcounts_genes", sendo a matriz de distâncias calculada com base em distâncias euclideanas e o algoritmo de *clustering* usado ter sido *complete linkage*. As linhagens (colunas do *heatmap*) foram também assinalas a **vermelho** caso fossem **linhagens primárias com um alto número de mutações** ou a **azul** caso fossem **linhagens primárias com um baixo número de mutações**.
+
+```{r heatmap yo, class.output="scroll", fig.align='center'}
+#selecionar cores
+mypalette <- brewer.pal(11,"RdYlBu")
+morecols <- colorRampPalette(mypalette)
+col.cell <- c("darkslategray1", "coral")[groups_combine]
+
+heatmap.2(logcounts_genes,col=rev(morecols(50)), trace="none", main="100 diferentially expressed genes PHvsPL", ColSideColors = col.cell, scale="row")
+legend(-0.1, -0.125, legend=levels(groups_combine), fill=c("darkslategray1", "coral"), xpd = T)
+
+```
+
+É possível observar que existem *clusters* de linhagens em que certos grupos de genes são expressos de forma semelhante, e que existem diferenças na expressão genética entre grupos de linhagens. Por exemplo, é possível que em grupos em que predominam linhagens classificadas como *"Primary.High"* ocorra um padrão de expressão oposto aos grupos onde predominam linhagens classificadas como *"Primary.Low"*. Quando não é possível observar a predominancia de uma das duas classes nos *clusters* de linhagens, torna-se mais difícil de observar esta expressão diferencial.  
+
+### Análise de componentes principais (PCA)
+
+```{r pca, class.output="scroll", fig.align='center'}
+res.pca<-PCA(t(logcounts_genes), scale.unit = F, graph = F)
+
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+
+#Number of dimensions until we reach 90% cumulative variance
+i = 1
+while ( eig.val[i,3] < 90 ) i = i + 1
+i
+
+fviz_famd_ind(res.pca, geom = c("point"), col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              palette = "rainbow", addEllipses = FALSE, ellipse.type = "confidence",
+              ggtheme = theme_minimal(), repel = TRUE, labels = F)  
+
+fviz_famd_ind(res.pca, geom = c("point"),
+              habillage = groups_combine, # color by groups 
+              palette = c("rainbow"),
+              addEllipses = FALSE, ellipse.type = "confidence", 
+              repel = TRUE, labels = FALSE )
+
+```
+
+Foi realizada também uma **análise de componentes principais (PCA)** sobre estes dados de forma a visualizar os dados e efetuar uma redução de dimensionalidade. Os dados já se encontravam normalizados, e do PCA temos que a 1ª dimensão agrega $23\%$ da variabilidade da amostra, a 2ª dimensão $9.7\%$ e a 3ª dimensão $6.6\%$, perfazendo um total de cerca de $40\%$ de variabilidade cumulativa. Para perfazer mais de $90\%$ da variabilidade total do *dataset*, seria necessário acumular $49$ componentes.  
+Ao observar as linhagens representadas graficamente ao longo dos 1º e 2º componentes, temos que ao colorir as linhagens pela sua qualidade de representação "cos2" que as linhagens mais próximas do 0 são aquelas cuja variação se encontra menos explicada pelos dois componenetes representados, enquanto que aquelas mais distantes ao longo do 1º e 2º eixo são aquelas que se encontram melhor diferenciadas.  
+Quando colorimos as linhagens pela sua classificação como *"Primary.High"* ou **"Primary.Low"**, podemos observar que ocorre uma **tendência de agrupamento** das linhagens da classe **Primary.High** ao longo do **eixo negativo** do 1º componente e da classe **Primary.Low**  ao longo do **eixo positivo** do 1º componente. Isto é facilmente observável atendendo ao centro dos grupos formados (bolas grandes). Contudo **não existe** uma separação óbvia entre as linhagens de uma classe ou outra. 
+
+### *k-means clustering*
+
+```{r kmeans, class.output="scroll", fig.align='center'}
+#Kmeans comparacao PCA
+fviz_nbclust(t(logcounts_genes), kmeans, method = "silhouette")
+
+kmm_genes <- kmeans(t(logcounts_genes), 2)
+
+col.cell <- c( "coral","darkslategray1")[groups_combine]
+col.cell_Kmm <- c("darkslategray1", "coral")[kmm_genes$cluster]
+
+plot(res.pca$ind$coord[, 1], res.pca$ind$coord[, 2], col = col.cell_Kmm, pch = 16, xlab = "PC1", ylab = "PC2", main ="Map of predicted clusters")
+legend(27, -25, legend=c("1", "2"),fill=c( "darkslategray1", "coral"), xpd = T)
+
+plot(res.pca$ind$coord[, 1], res.pca$ind$coord[, 2], col = col.cell, pch = 16, xlab = "PC1", ylab = "PC2", main ="Map of observed data")
+legend(17, -25, legend=levels(groups_combine),fill=c( "coral","darkslategray1"), xpd = T)
+
+```
+
+Para efetuar o *clustering* por **k-means**, de forma a efetuar uma classificação dos grupos observados no **PCA**, foi primeiro realizada uma *siluette analysis* sobre os dados logaritmizados com recurso a função *fviz_nbclust*, que nos indicou que a solução ótima residia em $2$ *clusters*. De seguida foi efetuado o *clustering* com $2$ *clusters* de *input*, o que resultou na previsão de $2$ grupos de linhagens. Quando comparamos com os dados observados verificamos que ocorre uma dispersão muito superior dos dados, com as linhagens do tipo *"Primary.Low"* mais dispersas que aquelas do tipo *"Primary.High"*.  
+
+<a name="ML1"></a>
+
+## Análise supervisionada (Machine Learning) {.tabset}
+
+Mediante os resultados antes obtidos, propusemo-nos a construir um modelo de *machine learning* para efetuar a previsão da presença de um número baixo (**"Low"**) ou elevado de mutações (**"High"**) em linhagens cancerígenas pertencentes a tumores primários(**"Primary"**). Foram usados $100$ genes preditores provenientes da expressão diferencial, juntamente com $403$ linhagens cancerígenas primárias. 
+
+Para tal foram testadas 5 *frameworks*: **"Neural Networks"**, **"Random Forest"**, **"Decision Trees"**, **"K Nearest Neighbors"** e **"Naïve Bayes"**. 
+
+Em todos os modelos foi utilizada uma estimação do erro corresponde a **validação cruzada** com 10 *folds* repetida 5 vezes, aquando da sua construção. De forma a tornar estes resultados replicáveis, foi invocada uma *seed* de valor "16718". 
+
+```{r phpl_ml, class.output="scroll"}
+#seed para ser sempre igual
+set.seed(16718)
+#repeated cross validation
+cv.control = trainControl('repeatedcv', number = 10, repeats = 5)
+
+#dataframe ML
+ml_phpl <- as.data.frame(cbind(group = groups_combine, t(logcounts_genes)))
+
+ml_phpl$group = as.factor(ml_phpl$group)
+
+```
+
+
+### Neural Networks {-}
+
+```{r phpl_nnet, echo=TRUE, results='hide', class.output="scroll"}
+#Neural Networks -- Classification, Regression
+set.seed(16718)
+phpl_nnet_cv = train(group~., data = ml_phpl, method = "nnet", tuneLenght=10, trControl=cv.control)
+
+```
+
+```{r phpl_nnet_2, class.output="scroll"}
+phpl_nnet_cv
+
+```
+
+Na construção do modelo por **"Neural Networks"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"size"* 5 (número de unidades na camada intermédia) e a um *"decay"* (regularização para evitar sobreajustamento) de 0, possuindo o modelo uma **precisão** de aproximadamente $0.76$. 
+
+<a href="#ML1">Voltar à análise</a>
+
+### Random Forests {-}
+
+```{r phpl_rf, class.output="scroll"}
+#Random Forest -- Classification, Regression
+set.seed(16718)
+phpl_rf_cv = train(group~., data = ml_phpl, method = "rf", tuneLenght=10, trControl=cv.control)
+
+phpl_rf_cv
+
+```
+
+Na construção do modelo por **"Random Forest"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"mtry"* de 2 (número de variáveis randomizadamente amostradas como candidatas a cada ramificação), possuindo o modelo uma **precisão** de aproximadamente $0.78$.  
+
+<a href="#ML1">Voltar à análise</a>
+
+### Decision Trees {-}
+
+```{r phpl_rpart, class.output="scroll"}
+#Decision Trees -- Classification, Regression
+set.seed(16718)
+phpl_tree_cv = train(group~., data = ml_phpl, method = "rpart", tuneGrid=expand.grid(.cp=0.2), trControl=cv.control)
+
+phpl_tree_cv
+
+```
+
+Na construção do modelo por **"Decision Trees"** foi dado o argumento *"expand.grid = (.cp=0.2)"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"cp"* a um valor constante de 0.2 (complexidade do parâmetro e dos valores de erro associados), possuindo o modelo uma **precisão** de aproximadamente $0.70$.  
+
+<a href="#ML1">Voltar à análise</a>
+
+### k Nearest Neighbors {-}
+
+```{r phpl_knn, class.output="scroll"}
+#KNN -- Classification, Regression
+set.seed(16718)
+phpl_knn_cv = train(group~., data = ml_phpl, method = "knn", tuneGrid = expand.grid(k = 1:10), trControl=cv.control)
+
+phpl_knn_cv
+
+```
+
+Na construção do modelo por **"k Nearest Neighbours"** foi dado o argumento *"tuneLenght = expand.grid = (1:10)"*, ou seja o número de vizinhos a ser implementados pelo algoritmo.  
+Obtivemos que os parâmetros selecionados correspondem a um *"k"* de 8 (número de vizinhos), possuindo o modelo uma *precisão* de aproximadamente $0.74$.  
+
+<a href="#ML1">Voltar à análise</a>
+
+### Naïve Bayes {-}
+
+```{r phpl_nb, warning=FALSE, class.output="scroll"}
+#Naive Bayes -- Classification
+set.seed(16718)
+phpl_nb_cv = train(group~., data = ml_phpl, method = "nb", trControl=cv.control)
+
+phpl_nb_cv
+
+```
+
+Na construção do modelo por **"Naïve Bayes"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"fL"* de 0 (incorporação da suavização de Laplace), a ausência do uso de um *"kernel"* (uso de uma *kernel density estimate*) e um *"adjust = 1"* (ajuste da largura de banda da da *kernel density*), possuindo o modelo uma **precisão** de aproximadamente $0.76$.  
+
+<a href="#ML1">Voltar à análise</a>
+
+## Resultados *machine learning*
+
+Após observação da precisão dos 5 modelos para a classificação das linhagens cancerígenas primárias, selecionou-se o modelo obtido a partir do algoritmo de **"Random Forest"** como aquele com maior **precisão** entre os restantes, tomando esta o valor de $78\%$.  
+Este valor é subótimo para a performance de um algoritmo de *machine learning*, contudo, pode ser melhorado com a adição de mais entradas de dados, ou com enriquecimento de genes ou de outras variáveis que permitam melhor classificar estas classes.  
+
+## Importância das variáveis
+
+```{r phpl_imp, class.output="scroll"}
+#Importância de variáveis
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+results <- rfe(group~., data = ml_phpl, rfeControl=control, sizes=c(1:10,20,40,60,80,100))
+results
+important_genes <- predictors(results)
+
+ann_imp <- select(org.Hs.eg.db,keys=important_genes, keytype='ENSEMBL', columns=c('ENTREZID', "ENSEMBL", "SYMBOL", "GENENAME"))
+ann_imp
+
+```
+
+Por último, foi realizada a seleção de atributos para o *dataset* considerado para *machine learning*, através do método de *Recursive Feature Elimination*. Este algoritmo foi implementado com uma estimação do erro correspondente a validação cruzada 10 *folds*.  
+Através do argumento *"sizes"*, foi dado ao algoritmo o tamanho das amostragens de variáveis a testar. Foi então determinado que dos $100$ genes fornecidos, $80$ permitiam uma melhor precisão do algoritmo.  
+A análise das designações destes genes revelem-nos, consistentemente, um conjunto de genes predominantemente ligações a funções relacionadas com a membrana celular, o que é consistente com as análises anteriores.  
+
+# Previsão do efeito de um fármaco
+
+## Pré-processamento
+
+Indo de encontro aos objetivos deste trabalho, realizamos uma análise sobre a expressão diferencial de um conjunto de linhagens cancerígenas sobre a resposta a um dado fármaco não oncológico com potencial anti-cancerígeno.  
+Os *datasets* usados para este efeito foram aqueles anteriormente cruzados correspondendo ao **sub_drug_response** e **sub_raw_counts**.  
+
+```{r analise, class.output="scroll"}
+##Preparar para transpor dados de expressão/Reservar informação sobre os genes
+sub_drug_response_2 <- sub_drug_response %>% remove_rownames %>% column_to_rownames(var="DepMap_ID")
+
+# We estimate the variance for each row in the logcounts matrix
+var_drugs <- apply(t(sub_drug_response_2), 1, var)
+
+# Get the gene names for the top 500 most variable drugs
+select_drugs <- names(sort(var_drugs, decreasing=TRUE))[1:500]
+highly_variable_drugs <- sub_drug_response_2[, select_drugs]
+
+```
+
+Numa primeira instância procuraram-se os $500$ fármacos dentro do *dataset* **sub_drug_response** que possuiam maior variabilidade, dada pela sua variância, e estes foram reprentados através de um *heatmap* juntamente com as linhagens celulares. O *clustering* hierárquico foi efetuado com recurso a distância euclideana e com *complete linkage*.  
+
+## *Heatmap*
+
+```{r heatmap, class.output="scroll", fig.align='center'}
+#Heatmap for the drugs
+## Get some nicer colors
+mypalette <- brewer.pal(11,"RdYlBu")
+morecols <- colorRampPalette(mypalette)
+
+#Heatmap com clustering hierarquico com distancia euclideana e complete linkage
+heatmap.2(t(highly_variable_drugs), col=rev(morecols(50)), trace="none", main="      500 most variable drugs across lineages", scale="row")
+
+```
+
+Neste *heatmap* é observável a presença de dois grandes *clusters* nas amostras, em que as linhagens agrupadas à esquerda são menos impactadas por parte dos fármcaos considerados, enquanto que no *cluster* da direita existe um efeito tendencionalmente maior por parte desses mesmos fármacos.  
+É possível também observar que o *cluster* de fármacos mais inferior é aquele que possui um **efeito mais elevado** sobre as linhagens celulares, particularmente no *cluster* de linhagens mais à direira.  
+Isto é um testemunho para as potencialidades anti-cancerígenas destes fármacos.  
+
+## Discretização
+
+Desta forma, o fármaco com maior variabilidade foi selecionado para se efetuar uma análise de expressão diferencial, de forma a encontrar o conjunto de dados de expressão genética que podia ser usado para construir um modelo preditivo para a ação do mesmo.
+
+```{r discr, fig.align='center', class.output="scroll"}
+
+#Get the most variable drug
+#select_drug <- names(sort(var_drugs, decreasing=TRUE))[1:2]
+highly_variable_drug <- sub_drug_response_2[, select_drugs[1]]
+descr(highly_variable_drug)
+#Fazer a discritização de droga em 2 níveis : Low e high
+
+set.seed(16718)
+drug <- discretize(highly_variable_drug, method  = "cluster", breaks = 2, labels = c("Low", "High")) 
+drug <- discretize(highly_variable_drug, method  = "cluster", breaks = 2, labels = c("Low", "High")) 
+summary(drug)
+
+box_drug = as.data.frame(cbind(highly_variable_drug, drug))
+box_drug$drug<- factor(box_drug$drug, labels = c("Low", "High"))
+
+#Box plot - types
+p<-ggboxplot(box_drug,x = "drug", y = "highly_variable_drug", 
+             color = "drug", palette = c("#00AFBB", "#E7B800"),
+             ylab = "Efeito do fármaco", xlab = "Classes")
+
+ggpar(p , main = "Simvastatina Discreta Vs Contínua")
+
+```
+
+O fármaco selecionado corresponde à simvastatina, que é um fármaco pertencente à classe das estatinas, conhecidas por serem usadas com o afim de diminuir o risco de doenças cardiovasculares e regular níveis anormais de lípidos no sangue, nomeadamente diminuir *low density lipoprotein* (LDL) e aumentar *high density lipoprotein* (HDL). Esta dimininução ocorre devido à inibição de produção endógena de colesterol no fígado.  
+Os dados correspondentes a este fármaco foram discretizados utilizando a função *discretize* do package *arules.* O método utilizado corresponde ao *clustering* fornecendo o número que se desejava obter de classes, dada a natureza normalizada dos dados.  
+A separação destes dados é claramente visível através do *boxplot* construído, apresentando estes médias e distribuições diferentes.  
+
+## Expressão diferencial
+
+Partindo do vetor contendo a variável fatorial "drug", este foi utilizado como metadado para uma análise de expressão diferencial sobre o *dataset* **sub_raw_counts**. O objetivo era verificar os genes que sem encontravam mais diferencialmente expressos perante uma baixa ação da simvastatina (*"Low"*) e uma alta ação da mesma (*"High"*). Esta *pipeline* é igual à efetuada anteriormente e como tal omitiu-se a parte gráfica, retendo-se o essencial à interpretação dos resultados.
+
+```{r drug exp_diferencial, class.output="scroll"}
+#Preparar para transpor dados de expressão/Reservar informações sobre os genes
+sub_meta_expression <- sub_raw_counts %>% remove_rownames %>% column_to_rownames(var="DepMap_ID")
+
+#Ordenar os id das linhagens
+sub_meta_expression_ordered <- sub_meta_expression[ order(row.names(sub_meta_expression)), ]
+
+#Transpor a matrix de expressão
+sub_exp_matrix <- t(sub_meta_expression_ordered)
+
+#Anotações
+ensembl_ids <- sub("\\).*", "", sub(".*\\(", "", row.names(sub_exp_matrix)))
+
+row.names(sub_exp_matrix) = ensembl_ids
+
+ann <- select(org.Hs.eg.db, keys=ensembl_ids, keytype='ENSEMBL', columns=c('ENTREZID', "ENSEMBL", "SYMBOL", "GENENAME"))
+
+# Remove duplicated rows based on Ensembl_id
+ann <- ann %>% distinct(ENSEMBL, .keep_all = TRUE)
+
+#Lista de genes sem anotação
+noann<-subset(ann, is.na(ann$ENTREZID)) 
+
+#Remover genes sem anotação da matrix de expressao
+row.names(sub_exp_matrix) <- ensembl_ids
+
+sub_exp_matrix <- sub_exp_matrix[!(rownames(sub_exp_matrix) %in% noann$ENSEMBL), ]
+
+#Remover genes da dataframe da anotaÃ§Ã£o sem anotaÃ§Ã£o
+ann <- ann[!(ann$ENSEMBL %in% noann$ENSEMBL), ]
+
+#Carregar no EdgeR
+y_2 <- DGEList(counts = sub_exp_matrix)
+
+#Carregar anotação dos genes
+y_2$genes <- ann
+
+#Design for mutation types
+design_2 = model.matrix(~0+drug, data = y_2$samples)
+colnames(design_2) <- levels(drug)
+
+#Make contrasts
+contrast <- makeContrasts(Low-High, levels=design_2)
+
+keep <- filterByExpr(y_2, design_2)
+y_2 <- y_2[keep, , keep.lib.sizes=FALSE]
+
+#Normalization for composition bias
+y_2 <- calcNormFactors(y_2)
+
+#Start limma voom pipeline
+par(mfrow=c(1,1))
+v_2 <- voom(y_2, design_2 ,plot = F)
+
+#Limma Trend
+fit_2 <- lmFit(v_2, design_2)
+
+fit_2.cont <- contrasts.fit(fit_2, contrast)
+
+fit_2.cont <- eBayes(fit_2.cont)
+
+#Testing relative to a threshold - TREAT
+fit_2.treat <- treat(fit_2.cont, lfc=log2(1.2))
+
+res_2.treat <- decideTests(fit_2.treat)
+
+summary(res_2.treat)
+
+#GO enrichment using goana on Treat results
+go <- goana(fit_2.treat, coef="Low - High", geneid = fit_2.treat$genes$ENTREZID, species = "Hs")
+a = topGO(go, n=10)
+
+```
+
+Após a análise *TREAT*, verificamos que na totalidade temos $593$ genes diferencialmente expressos, dividindo-se estes em $378$ sub expressos e $215$ sobre expressos.  
+A análise das ontologias genéticas deste conjunto revela que, perante uma ação elevada da simvastatina quando comparada com uma ação baixa, observamos sub expressão de genes relacionados com a diferenciação e desenvolvimento das células do epitélio e da epiderme. Estes dados estão condizentes com a literatura que indicam que a ação da simvastatina possui um efeito desruptivo sobre os tecidos epiteliais, principalmente dos tumorais.  
+Simultaneamente temos sobre expressão de genes relacionados com a matriz extracelular, a angiogénese e a migração celular. Este padrão de expressão é notoriamente oposto àquele encontrado nas análises anteriores quando comparavamos linhagens com um número alto e baixo de mutações. Desta forma, observamos que a ação da simvastatina leva a uma expressão diferencial oposta à das linhagens com um número elevado de mutações, ou seja, tendem para uma carcinogénese mais elevada. Isto leva-nos a concluir que o efeito anti-cancerígeno é causado pela retardação da progressão tumoral provocada pela simvastatina e verificada através destes resultados.  
+
+## Filtragem
+
+De forma a realizar as análises multivaradas foi necessário construir um *dataframe* que as tornasse possíveis. Como tal, foram seleciondos a partir da análise diferencial, sobre a ação da simvastatina, os dados de expressão dos $100$ genes mais diferencialmente expressos.  
+
+```{r filtragem, class.output="scroll"}
+#Get differentially expressed genes for the drugs
+drugs_diff = topTreat(fit.treat, coef=1, number=100)
+
+#Filter the expression matrix to consider these genes
+indexes = which(rownames(sub_exp_matrix)%in%rownames(drugs_diff))
+exp_drugs = sub_exp_matrix[indexes,]
+
+logcounts_drug <- cpm(exp_drugs,log=TRUE)
+
+```
+
+De forma a permitir a análise destes dados, a matriz de contagens cruas foi normalizada, para contagens por milhão, e logaritmizada.  
+
+## Análise multivariada
+
+### Análise não supervisionada
+
+#### *Heatmap* e *clustering* hierárquico
+
+```{r dheat, class.output="scroll", fig.align='center'}
+mypalette <- brewer.pal(11,"RdYlBu")
+morecols <- colorRampPalette(mypalette)
+col.cell <- c("darkslategray1", "coral")[drug]
+
+heatmap.2(logcounts_drug,col=rev(morecols(50)),trace="none", main="    100 genes differencially expressed for simvastatin",ColSideColors=col.cell,scale="row")
+legend(-0.1, -0.125, legend=c("Low", "High"), fill=c("darkslategray1", "coral"), xpd = T)
+
+```
+
+Foi construido um *heatmap* de forma a relacionar o *clustering* hiérarquico entre os genes recolhidos na amostra anterior e as linhagens cancerígenas em estudo. Para a construção de ambos os endogramas foi utilizada uma matriz de distâncias euclidianas e o algoritmo de agrupamento utilizado foi *complete linkage*.  
+Observa-se que relativamente às linhagens existem nitidamente dois grupos que possuem uma expressão genética oposta. É possível também observar que o grupo mais à esquerda encontra-se enriquecido com linhagens com um baixo efeito da simvastatina enquanto que no grupo mais à direita se verifica o oposto.  
+Relativamente ao agrupamento dos genes, verificamos que, pelos padrões de expressão, ocorrem 4 grupos com um padrão de expressão "elevada/baixa/elevada/baixa" no grupo de linhagens mais à esquerda, e o padrão contrário no grupo mais à direita. Estes resultados demonstram um claro efeito da simvastatina na expressão diferencial destes genes e a forma que estes se encontram expressos nas linhagens cancerígenas.
+
+#### Análise de componentes principais (PCA)
+
+```{r dpca, class.output="scroll", fig.align='center'}
+res.pca <- PCA(t(logcounts_drug),  scale.unit = F, graph = F)
+
+eig.val <- get_eigenvalue(res.pca)
+eig.val[1:10,]
+
+#Number of dimensions until we reach 90% cumulative variance
+i = 1
+while ( eig.val[i,3] < 90 ) i = i + 1
+i
+
+fviz_famd_ind(res.pca, geom = c("point"), col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              palette = "rainbow", addEllipses = FALSE, ellipse.type = "confidence",
+              ggtheme = theme_minimal(), repel = TRUE, labels = F)  
+
+fviz_famd_ind(res.pca, geom = c("point"),
+              habillage = drug, # color by groups 
+              palette = c("rainbow"),
+              addEllipses = FALSE, ellipse.type = "confidence", 
+              repel = TRUE, invisible = "quali.var", labels = FALSE )
+
+```
+
+Da análise de componentes principais resultou que as primeiras 3 dimensões representam cumulativamente $69.1\%$ da variação total do *dataset*, sendo que a primeira representa $60.9\%$ e a segunda representa $5\%$.  
+Dos componentes gerados pela análise, são necessários reter $32$ de forma a, cumulativamente, agregar mais de $90\%$ da variação total do *dataset*.  
+Existe uma boa dispersão das linhagens/indivíduos ao longo da primeira dimensão, existindo um número reduzido de indivíduos com uma baixa qualidade de representação (*"cos2"*) no mapa fatorial apresentado. Observa-se ainda que as linhagens distribuidas na vertente positiva do eixo das abscissas (primeiro componente) encontram-se também dispersas ao longo do eixo das ordenadas (segundo componente).  
+Contudo, quando sobrepomos as linhagens distribuidas ao longo do mapa fatorial com a classificação da ação da simvastatina sobre as mesmas (*"Low"* e *"High"*), temos que não ocorre uma separação clara dos dois grupos. Apesar de haver uma tendência para linhagens classifcadas como *"High"* se apresentarem ao longo do quarto quadrante, verifica-se uma mistura entre linhagens classifcadas como *"Low"* e outras como *"High"* ao longo de todo o mapa.  
+
+#### *k-means clustering*
+
+```{r dkmeans, class.output="scroll", fig.align='center'}
+#Kmeans comparacao PCA
+fviz_nbclust(t(logcounts_drug), kmeans, method = "silhouette")
+
+kmm_drugs <- kmeans(t(logcounts_drug), 2)
+
+col.cell <- c("darkslategray1","coral")[drug]
+col.cell_Kmm <- c("darkslategray1", "coral")[kmm_drugs$cluster]
+
+plot(res.pca$ind$coord[, 1], res.pca$ind$coord[, 2], col = col.cell_Kmm, pch = 16, xlab = "PC1", ylab = "PC2", main ="Map of predicted clusters")
+legend(35.5, 15, legend=c("1", "2"),fill=c("darkslategray1", "coral"), xpd = T)
+
+plot(res.pca$ind$coord[, 1], res.pca$ind$coord[, 2], col = col.cell, pch = 16, xlab = "PC1", ylab = "PC2", main ="Map of observed data")
+legend(32, 15, legend=c("Low", "High"),fill=c("darkslategray1","coral"), xpd = T)
+
+```
+
+De forma a efetuar um *k-means clustering* sobre o *dataset* afim de encontrar os *clusters* teóricos, foi construído um *silhouette plot* para verificar o número ótimo de *clusters* a utilizar, tendo-se optado por $2$ *clusters.*  
+De seguida, foi efetuado o *clustering* em si tendo resultado em 2 grupos que se separam uniformemente ao longo do primeiro componente.  
+A comparação destes *clusters* com aqueles obtidos pela sobreposição da informação dos grupos reforça a conclusão anterior da má separação das linhagens por esta característica ao longo do mapa fatorial.
+
+<a name="ML2"></a>
+
+### Análise supervisionada (Machine Learning) {.tabset}
+
+Mediante os resultados antes obtidos, propusemo-nos a construir um modelo de *machine learning* para efetuar a previsão da ação da simvastatina sobre as linhagens celulares estando isto representado na classificação das linhagens como tendo uma baixa ação (*"Low"*) ou uma alta ação (*"High"*) da simvastatina. Foram usados $100$ genes preditores provenientes da expressão diferencial, juntamente com $559$ linhagens cancerígenas.  
+
+Para tal foram testadas 5 *frameworks*: **"Neural Networks"**, **"Random Forest"**, **"Decision Trees"**, **"K Nearest Neighbors"** e **"Naïve Bayes"**.  
+
+Em todos os modelos foi utilizada uma estimação do erro corresponde a **validação cruzada** com 10 *folds* repetida 5 vezes, aquando da sua construção. De forma a tornar estes resultados replicáveis, foi invocada uma *seed* de valor "16718".  
+
+```{r drug_ml, class.output="scroll"}
+#seed para ser sempre igual
+set.seed(16718)
+#repeated cross validation
+cv.control = trainControl('repeatedcv', number = 10, repeats = 5)
+
+#dataframe ML
+ml_drug <- as.data.frame(cbind(drug = drug, t(logcounts_drug)))
+
+ml_drug$drug = as.factor(ml_drug$drug)
+
+```
+
+
+#### Neural Networks {-}
+
+```{r drug_nnet, echo=TRUE, results='hide', class.output="scroll"}
+#Neural Networks -- Classification, Regression
+set.seed(16718)
+drug_nnet_cv = train(drug~., data = ml_drug, method = "nnet", tuneLenght=10, trControl=cv.control)
+
+```
+
+```{r drug_nnet_2, class.output="scroll"}
+drug_nnet_cv
+
+```
+
+Na construção do modelo por **"Neural Networks"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"size"* 1 (número de unidades na camada intermédia) e a um *"decay"* (regularização para evitar sobreajustamento) de 0.1, possuindo o modelo uma **precisão** de aproximadamente $0.62$.   
+
+<a href="#ML2">Voltar à análise</a>
+
+#### Random Forests {-}
+
+```{r drug_rf, class.output="scroll"}
+#Random Forest -- Classification, Regression
+set.seed(16718)
+drug_rf_cv = train(drug~., data = ml_drug, method = "rf", tuneLenght=10, trControl=cv.control)
+
+drug_rf_cv
+
+```
+
+Na construção do modelo por **"Random Forest"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"mtry"* de 2 (número de variáveis randomizadamente amostradas como candidatas a cada ramificação), possuindo o modelo uma **precisão** de aproximadamente $0.63$.  
+
+
+<a href="#ML2">Voltar à análise</a>
+
+#### Decision Trees {-}
+
+```{r drug_rpart, class.output="scroll"}
+#Decision Trees -- Classification, Regression
+set.seed(16718)
+drug_tree_cv = train(drug~., data = ml_drug, method = "rpart", tuneGrid=expand.grid(.cp=0.2), trControl=cv.control)
+
+drug_tree_cv
+
+```
+
+Na construção do modelo por **"Decision Trees"** foi dado o argumento *"expand.grid = (.cp=0.2)"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"cp"* a um valor constante de 0.2 (complexidade do parâmetro e dos valores de erro associados), possuindo o modelo uma **precisão** de aproximadamente $0.58$.  
+
+<a href="#ML2">Voltar à análise</a>
+
+#### k Nearest Neighbors {-}
+
+```{r drug_knn, class.output="scroll"}
+#KNN -- Classification, Regression
+set.seed(16718)
+drug_knn_cv = train(drug~., data = ml_drug, method = "knn", tuneGrid = expand.grid(k = 1:10), trControl=cv.control)
+
+drug_knn_cv
+
+```
+
+Na construção do modelo por **"k Nearest Neighbours"** foi dado o argumento *"tuneLenght = expand.grid = (1:10)"*, ou seja o número de vizinhos a ser implementados pelo algoritmo.  
+Obtivemos que os parâmetros selecionados correspondem a um *"k"* de 10 (número de vizinhos), possuindo o modelo uma *precisão* de aproximadamente $0.62$.  
+
+<a href="#ML2">Voltar à análise</a>
+
+#### Naïve Bayes {-}
+
+```{r drug_nb, warning=FALSE, class.output="scroll"}
+#Naive Bayes -- Classification
+set.seed(16718)
+drug_nb_cv = train(drug~., data = ml_drug, method = "nb", trControl=cv.control)
+
+drug_nb_cv
+
+```
+
+Na construção do modelo por **"Naïve Bayes"** foi dado o argumento *"tuneLenght = 10"*, correspondendo isto ao número combinações aleatórias de hiperparâmetros possíveis a utilizar pelo algoritmo na sua construção.  
+Obtivemos que os parâmetros selecionados correspondem a um *"fL"* de 0 (incorporação da suavização de Laplace), a ausência do uso de um *"kernel"* (uso de uma *kernel density estimate*) e um *"adjust = 1"* (ajuste da largura de banda da da *kernel density*), possuindo o modelo uma **precisão** de aproximadamente $0.63$.  
+
+<a href="#ML2">Voltar à análise</a>
+
+### Resultados *machine learning*
+
+Após observação da precisão dos 5 modelos para a classificação das linhagens cancerígenas, selecionou-se o modelo obtido a partir do algoritmo de **"Random Forest"** como aquele com maior **precisão** entre os restantes, tomando esta o valor de $63\%$.  
+Este valor é subótimo para a performance de um algoritmo de *machine learning*, contudo, pode ser melhorado com a adição de mais entradas de dados, ou com enriquecimento de genes ou de outras variáveis que permitam melhor classificar estas classes.  
+
+### Importância das variáveis
+
+```{r drug_imp, class.output="scroll"}
+#Importância de variáveis
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+results <- rfe(drug~., data = ml_drug, rfeControl=control, sizes=c(1:10,20,40,60,80,100))
+results
+important_genes <- predictors(results)
+
+ann_imp <- select(org.Hs.eg.db,keys=important_genes,keytype='ENSEMBL', columns=c('ENTREZID', "ENSEMBL", "SYMBOL", "GENENAME"))
+ann_imp
+
+```
+
+Por último, foi realizada a seleção de atributos para o *dataset* considerado para *machine learning*, através do método de *Recursive Feature Elimination*. Este algoritmo foi implementado com uma estimação do erro correspondente a validação cruzada 10 *folds*.  
+Através do argumento *"sizes"*, foi dado ao algoritmo o tamanho das amostragens de variáveis a testar. Foi então determinado que dos $100$ genes fornecidos, $4$ permitiam uma melhor precisão do algoritmo.  
+A análise das designações destes genes revelam-nos, consistentemente, um conjunto de genes predominantemente ligados a funções relacionadas com a membrana celular e com tecidos epiteliais, o que é consistente com as análises anteriores.  
+
+<a href="#topo">Voltar ao início</a>
