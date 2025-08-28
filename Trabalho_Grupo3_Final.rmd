@@ -1025,11 +1025,14 @@ results
 ```
 
 ```{r drug_imp_2, class.output="scroll"}
-control <- rfeControl(functions=rfFuncs, method="cv", number=10)
-results <- rfe(group~., data = ml_phpl, rfeControl=control, sizes=c(1:10,20,40,60,80,100))
-results
+
 important_genes <- predictors(results)
-important_genes
+
+# Run gprofiler2 enrichment using ENSEMBL IDs
+go_res <- gost(query = important_genes, organism = "hsapiens", sources = c("GO:BP", "GO:MF", "GO:CC"))
+
+# Show top results
+head(go_res$result, 10)
 
 ```
 
